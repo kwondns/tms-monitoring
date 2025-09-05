@@ -32,6 +32,9 @@ loki.process "preprocessing" {
       geoip_country_name   = "",
       geoip_continent_code = "",
       geoip_continent_name = "",
+      geoip_city_name      = "",
+      geoip_latitude       = "",
+      geoip_longitude      = "",
     }
   }
 
