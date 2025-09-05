@@ -5,56 +5,80 @@ phases:
     commands:
       - echo "Determining if monitoring files changed..."
       - |
-        CHANGED=$(git diff --name-only $CODEBUILD_STARTING_COMMIT $CODEBUILD_RESOLVED_SOURCE_VERSION || true)
+        # CodeBuild 환경 변수로 변경사항 감지
+        if [ -z "$CODEBUILD_WEBHOOK_PREV_COMMIT" ]; then
+          # CodePipeline에서 실행된 경우 HEAD^ 사용
+          PREV_COMMIT="HEAD^"
+        else
+          # GitHub webhook에서 실행된 경우
+          PREV_COMMIT="$CODEBUILD_WEBHOOK_PREV_COMMIT"
+        fi
+        
+        CHANGED=$(git diff --name-only $PREV_COMMIT $CODEBUILD_RESOLVED_SOURCE_VERSION || true)
         echo "Changed files: $CHANGED"
-      # Prometheus 변경 여부
-      - echo "$CHANGED" | grep -iE "prometheus" && export BUILD_PROMETHEUS=1 || export BUILD_PROMETHEUS=0
-      # Loki 변경 여부
-      - echo "$CHANGED" | grep -iE "loki"        && export BUILD_LOKI=1        || export BUILD_LOKI=0
-      # Alloy 변경 여부
-      - echo "$CHANGED" | grep -iE "alloy"       && export BUILD_ALLOY=1       || export BUILD_ALLOY=0
+        
+        # Prometheus 변경 여부
+        echo "$CHANGED" | grep -iE "prometheus" && export BUILD_PROMETHEUS=1 || export BUILD_PROMETHEUS=0
+        # Loki 변경 여부  
+        echo "$CHANGED" | grep -iE "loki" && export BUILD_LOKI=1 || export BUILD_LOKI=0
+        # Alloy 변경 여부
+        echo "$CHANGED" | grep -iE "alloy" && export BUILD_ALLOY=1 || export BUILD_ALLOY=0
+        
+        # 전체 모니터링 빌드 여부 결정 (변수명 수정)
+        if [ "$BUILD_PROMETHEUS" = "1" ] || [ "$BUILD_LOKI" = "1" ] || [ "$BUILD_ALLOY" = "1" ]; then
+          export BUILD_MONITORING=1
+        else 
+          export BUILD_MONITORING=0
+        fi
+
       - echo "Logging in to Amazon ECR..."
-      - aws ecr get-login-password --region $AWS_REGION \
-          | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 
   build:
     commands:
-        # 모니터링 설정 파일 변경 확인
-      - if [ "$BUILD_MONITORING" = "1" ]; then 
+      - |
+        if [ "$BUILD_MONITORING" = "1" ]; then
           echo "Building monitoring stack images..."
         
           # Prometheus 이미지 빌드 & 푸시
           if [ "$BUILD_PROMETHEUS" = "1" ]; then
-            echo "Build Prometheus..."
+            echo "Building Prometheus..."
             docker build -t $PROMETHEUS_REPO_URI:latest ./prometheus
             docker push $PROMETHEUS_REPO_URI:latest
+            echo "prometheus" >> changed_services.txt
           fi
         
-          # Loki 이미지 빌드 & 푸시 (커스텀 설정 있는 경우)
+          # Loki 이미지 빌드 & 푸시
           if [ "$BUILD_LOKI" = "1" ]; then
-            echo "Build Loki..."
+            echo "Building Loki..."
             docker build -t $LOKI_REPO_URI:latest ./loki
             docker push $LOKI_REPO_URI:latest
+            echo "loki" >> changed_services.txt
           fi
         
-          # Alloy 이미지 빌드 & 푸시 (커스텀 설정 있는 경우)
+          # Alloy 이미지 빌드 & 푸시
           if [ "$BUILD_ALLOY" = "1" ]; then
-            echo "Build Alloy..."
+            echo "Building Alloy..."
             docker build \
               --build-arg GEOIP_S3_URI=$GEOIP_S3_URI \
-              -t $ALLOY_REPO_URI:latest ./alloy 
+              -t $ALLOY_REPO_URI:latest ./alloy
             docker push $ALLOY_REPO_URI:latest
+            echo "alloy" >> changed_services.txt
           fi
+        
+          # deployment 디렉토리 생성 및 파일 복사
+          mkdir -p deployment
+          cp docker-compose.yml deployment/
+          cp -r scripts deployment/ || mkdir deployment/scripts
         
         else
           echo "No monitoring changes detected, skipping build..."
+          echo "false" > changed_services.txt
         fi
 
-  post_build:
-    commands:
-      - |
-        - if [ "$BUILD_MONITORING" = "1" ]; then
-          echo "Deploying to EC2..."
-          # EC2에서 docker-compose로 재배포
-          ssh -i $EC2_KEY_PATH ec2-user@$EC2_HOST "cd /opt/monitoring && docker-compose pull && docker-compose up -d"
-        fi
+artifacts:
+  files:
+    - appspec.yml
+    - deployment/**/*
+    - changed_services.txt
+  name: monitoring-deployment
