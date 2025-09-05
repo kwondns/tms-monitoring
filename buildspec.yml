@@ -3,33 +3,42 @@ version: 0.2
 phases:
   pre_build:
     commands:
-      - git fetch --no-tags --depth=2
-      - echo Logging in to Amazon ECR...
-      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - echo "Determining if monitoring files changed..."
+      - |
+        CHANGED=$(git diff --name-only $CODEBUILD_STARTING_COMMIT $CODEBUILD_RESOLVED_SOURCE_VERSION || true)
+        echo "Changed files: $CHANGED"
+      # Prometheus 변경 여부
+      - echo "$CHANGED" | grep -iE "prometheus" && export BUILD_PROMETHEUS=1 || export BUILD_PROMETHEUS=0
+      # Loki 변경 여부
+      - echo "$CHANGED" | grep -iE "loki"        && export BUILD_LOKI=1        || export BUILD_LOKI=0
+      # Alloy 변경 여부
+      - echo "$CHANGED" | grep -iE "alloy"       && export BUILD_ALLOY=1       || export BUILD_ALLOY=0
+      - echo "Logging in to Amazon ECR..."
+      - aws ecr get-login-password --region $AWS_REGION \
+          | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 
   build:
     commands:
-      - |
         # 모니터링 설정 파일 변경 확인
-        if git diff --name-only HEAD^ HEAD | grep -E "(prometheus|docker-compose|loki|alloy)"; then
+      - if [ "$BUILD_MONITORING" = "1" ]; then 
           echo "Building monitoring stack images..."
         
           # Prometheus 이미지 빌드 & 푸시
-          if [ -d "prometheus" ]; then
+          if [ "$BUILD_PROMETHEUS" = "1" ]; then
             echo "Build Prometheus..."
             docker build -t $PROMETHEUS_REPO_URI:latest ./prometheus
             docker push $PROMETHEUS_REPO_URI:latest
           fi
         
           # Loki 이미지 빌드 & 푸시 (커스텀 설정 있는 경우)
-          if [ -d "loki" ]; then
+          if [ "$BUILD_LOKI" = "1" ]; then
             echo "Build Loki..."
             docker build -t $LOKI_REPO_URI:latest ./loki
             docker push $LOKI_REPO_URI:latest
           fi
         
           # Alloy 이미지 빌드 & 푸시 (커스텀 설정 있는 경우)
-          if [ -d "alloy" ]; then
+          if [ "$BUILD_ALLOY" = "1" ]; then
             echo "Build Alloy..."
             docker build \
               --build-arg GEOIP_S3_URI=$GEOIP_S3_URI \
@@ -44,7 +53,7 @@ phases:
   post_build:
     commands:
       - |
-        if git diff --name-only HEAD^ HEAD | grep -E "(prometheus|docker-compose|loki|alloy)"; then
+        - if [ "$BUILD_MONITORING" = "1" ]; then
           echo "Deploying to EC2..."
           # EC2에서 docker-compose로 재배포
           ssh -i $EC2_KEY_PATH ec2-user@$EC2_HOST "cd /opt/monitoring && docker-compose pull && docker-compose up -d"
