@@ -1,0 +1,54 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      docker: 20
+
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+
+  build:
+    commands:
+      - |
+        # 모니터링 설정 파일 변경 확인
+        if git diff --name-only HEAD^ HEAD | grep -E "(prometheus|docker-compose|loki|alloy)"; then
+          echo "Building monitoring stack images..."
+        
+          # Prometheus 이미지 빌드 & 푸시
+          if [ -d "prometheus" ]; then
+            echo "Build Prometheus..."
+            docker build -t $PROMETHEUS_REPO_URI:latest ./prometheus
+            docker push $PROMETHEUS_REPO_URI:latest
+          fi
+        
+          # Loki 이미지 빌드 & 푸시 (커스텀 설정 있는 경우)
+          if [ -d "loki" ]; then
+            echo "Build Loki..."
+            docker build -t $LOKI_REPO_URI:latest ./loki
+            docker push $LOKI_REPO_URI:latest
+          fi
+        
+          # Alloy 이미지 빌드 & 푸시 (커스텀 설정 있는 경우)
+          if [ -d "alloy" ]; then
+            echo "Build Alloy..."
+            docker build \
+              --build-arg GEOIP_S3_URI=$GEOIP_S3_URI \
+              -t $ALLOY_REPO_URI:latest ./alloy 
+            docker push $ALLOY_REPO_URI:latest
+          fi
+        
+        else
+          echo "No monitoring changes detected, skipping build..."
+        fi
+
+  post_build:
+    commands:
+      - |
+        if git diff --name-only HEAD^ HEAD | grep -E "(prometheus|docker-compose|loki|alloy)"; then
+          echo "Deploying to EC2..."
+          # EC2에서 docker-compose로 재배포
+          ssh -i $EC2_KEY_PATH ec2-user@$EC2_HOST "cd /opt/monitoring && docker-compose pull && docker-compose up -d"
+        fi

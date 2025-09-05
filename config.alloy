@@ -1,0 +1,45 @@
+// Winston -> Alloy(HTTP) -> Loki
+
+loki.source.api "winston_in" {
+  http {
+    listen_address = "0.0.0.0"
+    listen_port    = 3500
+  }
+  labels     = { source = "winston" }
+  forward_to = [loki.process.preprocessing.receiver]
+}
+
+loki.process "preprocessing" {
+  stage.json {
+    expressions = { ip = "ip", url = "url" }
+  }
+
+  stage.geoip {
+    source  = "ip"
+    db      = "/geoip.mmdb"
+    db_type = "city"
+  }
+
+  stage.regex {
+    source              = "url"
+    expression          = "^/(?P<service>[^/?]+)"
+    labels_from_groups  = true
+  }
+
+  stage.labels {
+    values = {
+      geoip_country_code   = "",
+      geoip_country_name   = "",
+      geoip_continent_code = "",
+      geoip_continent_name = "",
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

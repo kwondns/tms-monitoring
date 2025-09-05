@@ -1,0 +1,133 @@
+networks:
+  monitor:
+    driver: bridge
+
+services:
+  prometheus:
+    build:
+      context: .
+      dockerfile: Dockerfile-Prometheus
+      platforms:
+        - linux/amd64
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tms-prometheus:latest
+    container_name: prometheus
+    user: root
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'  # 7일 보관으로 용량 최적화
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.max-block-duration=2h'  # 메모리 최적화
+    ports:
+      - "9090:9090"
+    mem_limit: 200m  # 200MB 메모리 제한
+    mem_reservation: 150m
+    cpus: 0.3
+    networks:
+      - monitor
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+    volumes:
+      - ./grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    mem_limit: 150m  # 150MB 메모리 제한
+    mem_reservation: 100m
+    cpus: 0.2
+    depends_on:
+      - prometheus
+    networks:
+      - monitor
+    restart: unless-stopped
+
+  loki:
+    build:
+      context: .
+      dockerfile: Dockerfile-Loki
+      platforms:
+        - linux/amd64
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tms-loki:latest
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/loki-config.yaml
+    networks:
+      - monitor
+    restart: unless-stopped
+
+  grafana-alloy:
+    build:
+      context: .
+      dockerfile: Dockerfile-Alloy
+      platforms:
+        - linux/amd64
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tms-alloy:latest
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      - "12345:12345"
+      - "3500:3500"
+    environment:
+      ALLOY_DEPLOY_MODE: docker
+    networks:
+      - monitor
+    restart: unless-stopped
+
+  node-exporter:
+    container_name: node-exporter
+    image: prom/node-exporter
+    ports:
+      - "9100:9100"
+    depends_on:
+      - prometheus
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitor
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    ports:
+      - "8080:8080"
+    networks:
+      - monitor
+    restart: unless-stopped
+
+  redis:
+    image: redis
+    container_name: redis
+    networks:
+      - monitor
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data:/data
+    restart: always
+
