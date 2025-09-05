@@ -4,9 +4,6 @@ files:
   - source: /deployment
     destination: /opt/monitoring
     overwrite: true
-  - source: /changed_services.txt
-    destination: /opt/monitoring/changed_services.txt
-    overwrite: true
 
 permissions:
   - object: /opt/monitoring

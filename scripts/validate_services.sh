@@ -25,8 +25,6 @@ fi
 
 if $services_healthy; then
     echo -e "${GREEN}🎉 모든 핵심 서비스가 정상 작동 중입니다!${NC}"
-    return 0
 else
     echo -e "${RED}⚠️  일부 서비스에 문제가 있습니다.${NC}"
-    return 1
 fi

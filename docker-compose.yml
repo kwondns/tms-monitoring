@@ -9,7 +9,7 @@ services:
       dockerfile: Dockerfile-Prometheus
       platforms:
         - linux/amd64
-    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tms-prometheus:latest
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tms-monitoring-prometheus:latest
     container_name: prometheus
     user: root
     command:
@@ -57,7 +57,7 @@ services:
       dockerfile: Dockerfile-Loki
       platforms:
         - linux/amd64
-    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tms-loki:latest
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tms-monitoring-loki:latest
     ports:
       - "3100:3100"
     command: -config.file=/etc/loki/loki-config.yaml
@@ -69,9 +69,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile-Alloy
+      args:
+        GEOIP_S3_URI: ${GEOIP_S3_URI}
       platforms:
         - linux/amd64
-    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tms-alloy:latest
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tms-monitoring-alloy:latest
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345

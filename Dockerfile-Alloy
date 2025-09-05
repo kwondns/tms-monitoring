@@ -1,10 +1,15 @@
 FROM grafana/alloy:v1.10.2
 
-RUN yum install -y awscli && \
-    mkdir -p /etc/alloy /opt/geoip \
+RUN apt-get update && \
+    apt-get install -y wget && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /etc/alloy /opt/geoip
 
-ARG GEOIP_S3_URI
-RUN aws s3 cp "${GEOIP_S3_URI}" /opt/geoip/geoip.mmdb
+
+ARG GEOIP_S3_URI=""
+
+ENV GEOIP_S3_URI ${GEOIP_S3_URI}
+RUN wget -O /opt/geoip/geoip.mmdb "${GEOIP_S3_URI}"
 
 RUN ln -sf /opt/geoip/geoip.mmdb /geoip.mmdb
 

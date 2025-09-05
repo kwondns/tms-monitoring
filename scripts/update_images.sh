@@ -3,25 +3,20 @@ set -e
 
 cd /opt/monitoring
 
+echo -e "${YELLOW}🚀 서비스 배포 중...${NC}"
+
 # ECR 로그인
-echo "Logging into ECR..."
-aws ecr get-login-password --region $AWS_DEFAULT_REGION | sudo docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+echo "ECR 로그인 중..."
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export AWS_REGION=ap-northeast-2
+aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com
 
-# 변경된 서비스만 이미지 pull
-if [ -f changed_services.txt ]; then
-  CHANGED_SERVICES=$(cat changed_services.txt)
-  echo "Changed services: $CHANGED_SERVICES"
+# 이전 컨테이너 정리
+echo "이전 컨테이너 정리 중..."
+docker-compose down --remove-orphans 2>/dev/null || true
 
-  if [ "$CHANGED_SERVICES" != "false" ]; then
-    while read -r service; do
-      if [ ! -z "$service" ]; then
-        echo "Pulling updated image for $service..."
-        sudo docker-compose pull "$service" || echo "Failed to pull $service, continuing..."
-      fi
-    done < changed_services.txt
-  else
-    echo "No services changed, skipping image pull"
-  fi
-fi
+# 최신 이미지 pull
+echo "최신 이미지 다운로드 중..."
+docker-compose pull
 
-echo "Image update completed"
+echo -e "${GREEN}✅ 이미지 업데이트 완료${NC}"
