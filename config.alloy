@@ -28,13 +28,13 @@ loki.process "preprocessing" {
 
   stage.labels {
     values = {
-      geoip_country_code   = "",
-      geoip_country_name   = "",
-      geoip_continent_code = "",
-      geoip_continent_name = "",
-      geoip_city_name      = "",
-      geoip_latitude       = "",
-      geoip_longitude      = "",
+      geoip_country_code            = "",
+      geoip_country_name            = "",
+      geoip_continent_code          = "",
+      geoip_continent_name          = "",
+      geoip_city_name               = "",
+      geoip_location_longitude      = "",
+      geoip_location_latitude       = "",
     }
   }
 
