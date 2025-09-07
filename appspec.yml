@@ -17,7 +17,9 @@ hooks:
     - location: deployment/scripts/update_images.sh
       timeout: 600
       runas: ec2-user
-
+    - location: deployment/scripts/register_cron.sh
+      timeout: 300
+      runas: root
   ApplicationStart:
     - location: deployment/scripts/start_services.sh
       timeout: 300
