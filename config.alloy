@@ -43,6 +43,6 @@ loki.process "preprocessing" {
 
 loki.write "default" {
   endpoint {
-    url = "http://loki:3100/loki/api/v1/push"
+    url = "http://monitoring-loki-1:3100/loki/api/v1/push"
   }
 }

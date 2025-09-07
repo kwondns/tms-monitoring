@@ -4,6 +4,8 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
 
+cd /opt/monitoring
+
 echo -e "${YELLOW}🚀 서비스 배포 중...${NC}"
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 export AWS_REGION=ap-northeast-2

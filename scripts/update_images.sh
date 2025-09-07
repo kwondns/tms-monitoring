@@ -3,8 +3,6 @@ set -e
 
 cd /opt/monitoring
 
-echo -e "${YELLOW}🚀 서비스 배포 중...${NC}"
-
 # ECR 로그인
 echo "ECR 로그인 중..."
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
