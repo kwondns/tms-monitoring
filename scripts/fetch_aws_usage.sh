@@ -6,7 +6,7 @@
 
 TEXTFILE_DIR="/opt/monitoring/node_exporter/textfile_collector"
 TEMP_FILE_MONTHLY=$(mktemp)
-OUTPUT_FILE="$TEXTFILE_DIR/aws_monthly_costs.prom"
+OUTPUT_FILE_MONTHLY="$TEXTFILE_DIR/aws_monthly_costs.prom"
 
 # 6개월 전 월 시작일과 다음 월 시작일 설정
 SIX_MONTHS_AGO_START=$(date +"%Y-%m-01" -d "6 months ago")
@@ -51,7 +51,7 @@ INNER_EOF
   echo "aws_cost_last_updated_timestamp $(date +%s)" >> "$TEMP_FILE_MONTHLY"
 
   # 원자적 파일 이동
-  mv "$TEMP_FILE_MONTHLY" "$OUTPUT_FILE"
+  mv "$TEMP_FILE_MONTHLY" "$OUTPUT_FILE_MONTHLY"
 
   # 로깅: 각 월별 비용 출력
   echo "$COST_DATA" | jq -r '.ResultsByTime[] | .TimePeriod.Start[0:7] + ": $" + .Total.UnblendedCost.Amount'
@@ -61,12 +61,14 @@ else
   exit 1
 fi
 
+chmod 644 $OUTPUT_FILE_MONTHLY
+
 ############################
 # 서비스 별 사용량 & 비용 (현재 월)
 ############################
 
 TEMP_FILE_SERVICE=$(mktemp)
-OUTPUT_FILE="$TEXTFILE_DIR/aws_current_cost_by_service.prom"
+OUTPUT_FILE_SERVICE="$TEXTFILE_DIR/aws_current_cost_by_service.prom"
 
 # 현재 월 시작일과 다음 월 시작일 설정
 MONTH_START=$(date +"%Y-%m-01")
@@ -111,9 +113,11 @@ INNER_EOF
   echo "aws_current_month_total_cost_usd{month=\"$CURRENT_MONTH\"} $TOTAL_COST" >> "$TEMP_FILE_SERVICE"
 
   # 원자적 파일 이동
-  mv "$TEMP_FILE_SERVICE" "$OUTPUT_FILE"
+  mv "$TEMP_FILE_SERVICE" "$OUTPUT_FILE_SERVICE"
 else
   echo "Failed to retrieve AWS service cost data" >&2
   rm -f "$TEMP_FILE_SERVICE"
   exit 1
 fi
+
+chmod 644 $OUTPUT_FILE_SERVICE
