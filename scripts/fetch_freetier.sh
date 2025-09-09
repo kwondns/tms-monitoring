@@ -11,7 +11,8 @@ TMPFILE=$(mktemp)
 # JSON 파싱하여 Prometheus 포맷으로 변환
 echo "$OUTPUT" | jq -r '.freeTierUsages[] |
   "aws_freetier_usage{service=\"\(.service)\",usageType=\"\(.usageType)\",region=\"\(.region)\",unit=\"\(.unit)\"} \(.actualUsageAmount)\naws_freetier_limit{service=\"\(.service)\",usageType=\"\(.usageType)\",region=\"\(.region)\",unit=\"\(.unit)\"} \(.limit)"' \
-> "$TMPFILE"# 텍스트 파일로 이동
+> "$TMPFILE"
+# 텍스트 파일로 이동
 
 mkdir -p "$COLLECTOR_DIR"
 
